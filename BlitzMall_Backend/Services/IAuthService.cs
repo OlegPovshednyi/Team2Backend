@@ -7,7 +7,8 @@ namespace BlitzMall_Backend.Services
         Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
         Task<AuthResponseDto> LoginAsync(LoginDto dto);
         Task ForgotPasswordAsync(ForgotPasswordDto dto);
-
+        Task<AuthResponseDto> GoogleLoginAsync(
+          string idToken);
         Task ResetPasswordAsync(ResetPasswordDto dto);
 
         Task ChangePasswordAsync(

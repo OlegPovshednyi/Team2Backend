@@ -149,5 +149,38 @@ namespace BlitzMall_Backend.Controllers
                 });
             }
         }
+            [HttpPost("google")]
+            public async Task<IActionResult> GoogleLogin(
+                [FromBody] GoogleLoginDto dto)
+            {
+                if (!ModelState.IsValid)
+                    return BadRequest(ModelState);
+
+                try
+                {
+                    var result =
+                        await _authService.GoogleLoginAsync(
+                            dto.IdToken);
+
+                    return Ok(result);
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    return Unauthorized(new
+                    {
+                        message = ex.Message
+                    });
+                }
+                catch (InvalidOperationException ex)
+                {
+                    return Conflict(new
+                    {
+                        message = ex.Message
+                    });
+                }
+            }
+
+
+
+        }
     }
-}

@@ -1,6 +1,7 @@
 using BlitzMall_Backend.Data;
 using BlitzMall_Backend.DTOs.Auth;
 using BlitzMall_Backend.Models;
+using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
@@ -8,7 +9,6 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
-
 namespace BlitzMall_Backend.Services
 {
     public class AuthService : IAuthService
@@ -217,5 +217,51 @@ namespace BlitzMall_Backend.Services
             return new JwtSecurityTokenHandler()
                 .WriteToken(token);
         }
+
+
+        public async Task<AuthResponseDto> GoogleLoginAsync(string idToken)
+        {
+            var clientId = _config["Google:ClientId"]
+                ?? throw new InvalidOperationException("Google Client ID is not configured.");
+
+            var payload = await GoogleJsonWebSignature.ValidateAsync(
+                idToken,
+                new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { clientId }
+                });
+
+            if (payload.EmailVerified != true || string.IsNullOrEmpty(payload.Email))
+                throw new UnauthorizedAccessException("Invalid Google account.");
+
+            var user = await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == payload.Email);
+
+            if (user == null)
+            {
+                var role = await _db.Roles
+                    .FirstOrDefaultAsync(r => r.Name == "Buyer")
+                    ?? throw new InvalidOperationException("Default role not found.");
+
+                user = new User
+                {
+                    Name = payload.Name ?? payload.Email,
+                    Email = payload.Email,
+                    PasswordHash = null,
+                    RoleId = role.Id,
+                    Status = "Active",
+                    CreatedAt = DateTime.UtcNow,
+                    Role = role
+                };
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+            }
+
+            return BuildResponse(user, user.Role!.Name!);
+        }
+
     }
-}
+    }
+
