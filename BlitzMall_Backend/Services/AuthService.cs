@@ -1,6 +1,7 @@
 using BlitzMall_Backend.Data;
 using BlitzMall_Backend.DTOs.Auth;
 using BlitzMall_Backend.Models;
+using FirebaseAdmin.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -13,6 +14,8 @@ namespace BlitzMall_Backend.Services
     {
         private readonly AppDbContext _db;
         private readonly IConfiguration _config;
+
+        private static readonly Dictionary<string, string> _resetCodes = new();
 
         public AuthService(AppDbContext db, IConfiguration config)
         {
@@ -55,6 +58,91 @@ namespace BlitzMall_Backend.Services
                 throw new UnauthorizedAccessException("Invalid credentials.");
 
             return BuildResponse(user, user.Role!.Name!);
+        }
+
+        public async Task<AuthResponseDto> FirebaseLoginAsync(string idToken)
+        {
+            FirebaseToken decodedToken;
+            try
+            {
+                decodedToken = await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken);
+            }
+            catch (Exception)
+            {
+                throw new UnauthorizedAccessException("Invalid Firebase token.");
+            }
+
+            var email = decodedToken.Claims.TryGetValue("email", out var emailClaim)
+                ? emailClaim?.ToString() ?? string.Empty
+                : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(email))
+                throw new UnauthorizedAccessException("Firebase token has no email.");
+
+            var name = decodedToken.Claims.TryGetValue("name", out var nameClaim)
+                ? nameClaim?.ToString()
+                : null;
+
+            var user = await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null)
+            {
+                var buyerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "Buyer")
+                    ?? throw new InvalidOperationException("Default role not found.");
+
+                user = new User
+                {
+                    Name = name ?? email.Split('@')[0],
+                    Email = email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
+                    RoleId = buyerRole.Id,
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "Active"
+                };
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+                user.Role = buyerRole;
+            }
+
+            return BuildResponse(user, user.Role!.Name!);
+        }
+
+        public async Task ForgotPasswordAsync(string email)
+        {
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email)
+                ?? throw new InvalidOperationException("User not found.");
+
+            _resetCodes[email] = "123456";
+
+            await Task.CompletedTask;
+        }
+
+        public async Task<bool> VerifyCodeAsync(string email, string code)
+        {
+            await Task.CompletedTask;
+
+            if (_resetCodes.TryGetValue(email, out var stored))
+                return stored == code;
+
+            return false;
+        }
+
+        public async Task ResetPasswordAsync(string email, string code, string newPassword)
+        {
+            var valid = await VerifyCodeAsync(email, code);
+            if (!valid)
+                throw new InvalidOperationException("Invalid or expired code.");
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email)
+                ?? throw new InvalidOperationException("User not found.");
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            _resetCodes.Remove(email);
+
+            await _db.SaveChangesAsync();
         }
 
         private AuthResponseDto BuildResponse(User user, string role) => new()
