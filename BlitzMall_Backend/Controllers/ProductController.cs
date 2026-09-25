@@ -100,5 +100,17 @@ namespace BlitzMall_Backend.Controllers
             return Ok(products);
         }
 
+        [HttpGet("search")]
+        public async Task<IActionResult> Search(
+            [FromQuery] string? q = null,
+            [FromQuery] int? categoryId = null,
+            [FromQuery] decimal? minPrice = null,
+            [FromQuery] decimal? maxPrice = null,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 12)
+        {
+            var result = await _productService.SearchAsync(q, categoryId, minPrice, maxPrice, page, pageSize);
+            return Ok(result);
+        }
     }
 }
