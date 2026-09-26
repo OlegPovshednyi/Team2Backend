@@ -21,6 +21,8 @@
         [MaxLength(20)]
         public string? Phone { get; set; }
 
+        public DateTime? BirthDate { get; set; }
+
         [MaxLength(255)]
         public string? PasswordHash { get; set; }
 

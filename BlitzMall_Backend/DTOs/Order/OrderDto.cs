@@ -8,6 +8,7 @@ namespace BlitzMall_Backend.DTOs.Order
         public string DeliveryAddress { get; set; } = string.Empty;
         public string Phone { get; set; } = string.Empty;
         public string? Comment { get; set; }
+        public string? PaymentMethod { get; set; }
         public DateTime? CreatedDate { get; set; }
         public List<OrderItemDto> Items { get; set; } = new();
     }

@@ -21,7 +21,8 @@ namespace BlitzMall_Backend
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("FrontendPolicy", policy =>
-                    policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+                    policy.WithOrigins("http://localhost:5173", "http://localhost:5174", "https://*.ngrok-free.app", "https://*.trycloudflare.com")
+                          .SetIsOriginAllowedToAllowWildcardSubdomains()
                           .AllowAnyHeader()
                           .AllowAnyMethod()
                           .AllowCredentials());
@@ -42,6 +43,7 @@ namespace BlitzMall_Backend
             builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<ICartService, CartService>();
             builder.Services.AddScoped<IOrderService, OrderService>();
+            builder.Services.AddScoped<IProfileService, ProfileService>();
             builder.Services.AddHttpContextAccessor();
 
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
