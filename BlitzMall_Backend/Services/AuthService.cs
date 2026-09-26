@@ -76,26 +76,47 @@ namespace BlitzMall_Backend.Services
                 ? emailClaim?.ToString() ?? string.Empty
                 : string.Empty;
 
-            if (string.IsNullOrWhiteSpace(email))
-                throw new UnauthorizedAccessException("Firebase token has no email.");
+            var phoneNumber = decodedToken.Claims.TryGetValue("phone_number", out var phoneClaim)
+                ? phoneClaim?.ToString() ?? string.Empty
+                : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(email) && string.IsNullOrWhiteSpace(phoneNumber))
+                throw new UnauthorizedAccessException("Firebase token has no email or phone.");
 
             var name = decodedToken.Claims.TryGetValue("name", out var nameClaim)
                 ? nameClaim?.ToString()
                 : null;
 
-            var user = await _db.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == email);
+            var buyerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "Buyer")
+                ?? throw new InvalidOperationException("Default role not found.");
+
+            User? user = null;
+
+            if (!string.IsNullOrWhiteSpace(email))
+            {
+                user = await _db.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Email == email);
+            }
+
+            if (user == null && !string.IsNullOrWhiteSpace(phoneNumber))
+            {
+                user = await _db.Users
+                    .Include(u => u.Role)
+                    .FirstOrDefaultAsync(u => u.Phone == phoneNumber);
+            }
 
             if (user == null)
             {
-                var buyerRole = await _db.Roles.FirstOrDefaultAsync(r => r.Name == "Buyer")
-                    ?? throw new InvalidOperationException("Default role not found.");
+                var placeholderEmail = !string.IsNullOrWhiteSpace(email)
+                    ? email
+                    : $"phone_{phoneNumber.TrimStart('+')}@blitzmall.phone";
 
                 user = new User
                 {
-                    Name = name ?? email.Split('@')[0],
-                    Email = email,
+                    Name = name ?? (!string.IsNullOrWhiteSpace(email) ? email.Split('@')[0] : phoneNumber),
+                    Email = placeholderEmail,
+                    Phone = !string.IsNullOrWhiteSpace(phoneNumber) ? phoneNumber : null,
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString()),
                     RoleId = buyerRole.Id,
                     CreatedAt = DateTime.UtcNow,
@@ -105,6 +126,11 @@ namespace BlitzMall_Backend.Services
                 _db.Users.Add(user);
                 await _db.SaveChangesAsync();
                 user.Role = buyerRole;
+            }
+            else if (!string.IsNullOrWhiteSpace(phoneNumber) && string.IsNullOrWhiteSpace(user.Phone))
+            {
+                user.Phone = phoneNumber;
+                await _db.SaveChangesAsync();
             }
 
             return BuildResponse(user, user.Role!.Name!);
