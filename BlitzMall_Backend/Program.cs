@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+
 namespace BlitzMall_Backend
 {
     public class Program
@@ -42,7 +43,12 @@ namespace BlitzMall_Backend
             builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<ICartService, CartService>();
             builder.Services.AddScoped<IOrderService, OrderService>();
+            builder.Services.AddScoped<IPaymentService, PaymentService>();
+            builder.Services.AddScoped<IDeliveryService, DeliveryService>();
+
             builder.Services.AddHttpContextAccessor();
+            builder.Services.AddMemoryCache();
+            builder.Services.AddScoped<IEmailService, EmailService>();
 
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
@@ -59,6 +65,7 @@ namespace BlitzMall_Backend
                             Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
                     };
                 });
+
             builder.Services.AddEndpointsApiExplorer();
 
             builder.Services.AddSwaggerGen(options =>
@@ -89,8 +96,12 @@ namespace BlitzMall_Backend
                 });
             });
 
-            var firebaseEmulatorHost = Environment.GetEnvironmentVariable("FIREBASE_AUTH_EMULATOR_HOST");
-            var firebaseCredentialPath = builder.Configuration["Firebase:ServiceAccountPath"];
+            var firebaseEmulatorHost =
+                Environment.GetEnvironmentVariable("FIREBASE_AUTH_EMULATOR_HOST");
+
+            var firebaseCredentialPath =
+                builder.Configuration["Firebase:ServiceAccountPath"];
+
             if (!string.IsNullOrWhiteSpace(firebaseEmulatorHost))
             {
                 FirebaseApp.Create(new AppOptions
@@ -98,9 +109,12 @@ namespace BlitzMall_Backend
                     ProjectId = builder.Configuration["Firebase:ProjectId"],
                     Credential = GoogleCredential.FromAccessToken("test-token")
                 });
-                Console.WriteLine($"Firebase running against emulator: {firebaseEmulatorHost}");
+
+                Console.WriteLine(
+                    $"Firebase running against emulator: {firebaseEmulatorHost}");
             }
-            else if (!string.IsNullOrWhiteSpace(firebaseCredentialPath) && File.Exists(firebaseCredentialPath))
+            else if (!string.IsNullOrWhiteSpace(firebaseCredentialPath) &&
+                     File.Exists(firebaseCredentialPath))
             {
                 FirebaseApp.Create(new AppOptions
                 {
@@ -109,7 +123,8 @@ namespace BlitzMall_Backend
             }
             else
             {
-                Console.WriteLine("Firebase service account not found. Firebase login endpoint will not work until 'Firebase:ServiceAccountPath' is configured.");
+                Console.WriteLine(
+                    "Firebase service account not found. Firebase login endpoint will not work until 'Firebase:ServiceAccountPath' is configured.");
             }
 
             var app = builder.Build();

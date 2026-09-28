@@ -1,6 +1,8 @@
 using BlitzMall_Backend.DTOs.Auth;
 using BlitzMall_Backend.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace BlitzMall_Backend.Controllers
 {
@@ -16,7 +18,8 @@ namespace BlitzMall_Backend.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
+        public async Task<IActionResult> Register(
+            [FromBody] RegisterDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -28,12 +31,16 @@ namespace BlitzMall_Backend.Controllers
             }
             catch (InvalidOperationException ex)
             {
-                return Conflict(new { message = ex.Message });
+                return Conflict(new
+                {
+                    message = ex.Message
+                });
             }
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginDto dto)
+        public async Task<IActionResult> Login(
+            [FromBody] LoginDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -45,72 +52,174 @@ namespace BlitzMall_Backend.Controllers
             }
             catch (UnauthorizedAccessException)
             {
-                return Unauthorized(new { message = "Invalid credentials." });
+                return Unauthorized(new
+                {
+                    message = "Invalid credentials."
+                });
             }
         }
 
-        [HttpPost("firebase-login")]
-        public async Task<IActionResult> FirebaseLogin([FromBody] FirebaseLoginDto dto)
+        [HttpPost("google")]
+        public async Task<IActionResult> GoogleLogin(
+            [FromBody] GoogleLoginDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
-                var result = await _authService.FirebaseLoginAsync(dto.IdToken);
+                var result = await _authService.GoogleLoginAsync(
+                    dto.IdToken);
+
                 return Ok(result);
             }
             catch (UnauthorizedAccessException ex)
             {
-                return Unauthorized(new { message = ex.Message });
+                return Unauthorized(new
+                {
+                    message = ex.Message
+                });
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return Conflict(new
+                {
+                    message = ex.Message
+                });
+            }
+        }
+
+        [HttpPost("firebase-login")]
+        public async Task<IActionResult> FirebaseLogin(
+            [FromBody] FirebaseLoginDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var result = await _authService.FirebaseLoginAsync(
+                    dto.IdToken);
+
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new
+                {
+                    message = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
             }
         }
 
         [HttpPost("forgot-password")]
-        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        public async Task<IActionResult> ForgotPassword(
+            [FromBody] ForgotPasswordDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
-                await _authService.ForgotPasswordAsync(dto.Email);
-                return Ok(new { message = "Code sent" });
+                await _authService.ForgotPasswordAsync(dto);
             }
-            catch (InvalidOperationException ex)
+            catch
             {
-                return BadRequest(new { message = ex.Message });
+                // Do not reveal whether the email exists.
             }
+
+            return Ok(new
+            {
+                message =
+                    "If the email exists, a reset code has been sent."
+            });
         }
 
         [HttpPost("verify-code")]
-        public async Task<IActionResult> VerifyCode([FromBody] VerifyCodeDto dto)
+        public async Task<IActionResult> VerifyCode(
+            [FromBody] VerifyCodeDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var valid = await _authService.VerifyCodeAsync(dto.Email, dto.Code);
-            return Ok(new { valid });
+            var valid = await _authService.VerifyCodeAsync(
+                dto.Email,
+                dto.Code);
+
+            return Ok(new
+            {
+                valid
+            });
         }
 
         [HttpPost("reset-password")]
-        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        public async Task<IActionResult> ResetPassword(
+            [FromBody] ResetPasswordDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
             try
             {
-                await _authService.ResetPasswordAsync(dto.Email, dto.Code, dto.NewPassword);
-                return Ok(new { message = "Password changed" });
+                await _authService.ResetPasswordAsync(dto);
+
+                return Ok(new
+                {
+                    message = "Password reset successfully."
+                });
             }
             catch (InvalidOperationException ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
+        }
+
+        [Authorize]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword(
+            [FromBody] ChangePasswordDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var userIdClaim = User.FindFirstValue(
+                    ClaimTypes.NameIdentifier);
+
+                if (!int.TryParse(userIdClaim, out var userId))
+                {
+                    return Unauthorized(new
+                    {
+                        message = "Invalid user identity."
+                    });
+                }
+
+                await _authService.ChangePasswordAsync(
+                    userId,
+                    dto);
+
+                return Ok(new
+                {
+                    message = "Password changed successfully."
+                });
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new
+                {
+                    message = ex.Message
+                });
             }
         }
     }
