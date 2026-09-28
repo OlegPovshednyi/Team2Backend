@@ -1,19 +1,24 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace BlitzMall_Backend.DTOs.Auth
 {
     public class ResetPasswordDto
     {
-        [Required, EmailAddress]
+        [Required]
+        [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        [Required, StringLength(6, MinimumLength = 6)]
+        [Required]
+        [StringLength(6, MinimumLength = 6)]
         public string Code { get; set; } = string.Empty;
 
-        [Required, MinLength(6), MaxLength(100)]
+        [Required]
+        [MinLength(6)]
+        [MaxLength(100)]
         public string NewPassword { get; set; } = string.Empty;
 
-        [Required, Compare("NewPassword")]
+        [Required]
+        [Compare(nameof(NewPassword))]
         public string ConfirmPassword { get; set; } = string.Empty;
     }
 }

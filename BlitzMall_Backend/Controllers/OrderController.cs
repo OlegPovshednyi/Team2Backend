@@ -1,4 +1,4 @@
-﻿using BlitzMall_Backend.DTOs.Order;
+using BlitzMall_Backend.DTOs.Order;
 using BlitzMall_Backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -30,6 +30,7 @@ namespace BlitzMall_Backend.Controllers
                 return StatusCode(500, new { message = ex.Message });
             }
         }
+
         [HttpGet("{id}")]
         public async Task<ActionResult<OrderDto>> GetById(int id)
         {
@@ -47,24 +48,49 @@ namespace BlitzMall_Backend.Controllers
             }
         }
 
+        [HttpGet("my")]
+        public async Task<IActionResult> GetMyOrders()
+        {
+            try
+            {
+                var orders = await _orderService.GetMyOrdersAsync();
+                return Ok(orders);
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Unexpected error."
+                });
+            }
+        }
+
         [HttpPost]
         public async Task<ActionResult<OrderDto>> Create(
             [FromBody] CreateOrderDto dto)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             try
             {
-                var order = await _orderService.CreateAsync(dto);
+                var order = await _orderService.CreateFromCartAsync(dto);
 
-                return order == null
-                    ? BadRequest(new { message = "Unable to create order." })
-                    : CreatedAtAction(
-                        nameof(GetById),
-                        new { id = order.Id },
-                        order);
+                return Ok(order);
             }
-            catch (Exception ex)
+            catch (InvalidOperationException ex)
             {
-                return StatusCode(500, new { message = ex.Message });
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Unexpected error."
+                });
             }
         }
 
@@ -76,7 +102,9 @@ namespace BlitzMall_Backend.Controllers
         {
             try
             {
-                var order = await _orderService.UpdateStatusAsync(id, dto);
+                var order = await _orderService.UpdateStatusAsync(
+                    id,
+                    dto);
 
                 return order == null
                     ? NotFound()
@@ -84,7 +112,10 @@ namespace BlitzMall_Backend.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = ex.Message });
+                return StatusCode(500, new
+                {
+                    message = ex.Message
+                });
             }
         }
 
@@ -100,7 +131,10 @@ namespace BlitzMall_Backend.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = ex.Message });
+                return StatusCode(500, new
+                {
+                    message = ex.Message
+                });
             }
         }
     }

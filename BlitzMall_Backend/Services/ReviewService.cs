@@ -19,9 +19,10 @@ namespace BlitzMall_Backend.Services
             _httpContextAccessor = httpContextAccessor;
         }
 
-        public async Task<List<ReviewDto>> GetAllAsync()
+        public async Task<List<ReviewDto>> GetAllAsync(int? productId = null)
         {
             return await _db.Reviews
+                .Where(r => productId == null || r.ProductId == productId)
                 .Select(r => new ReviewDto
                 {
                     Id = r.Id,

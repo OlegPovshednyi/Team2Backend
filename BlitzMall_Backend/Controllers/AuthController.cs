@@ -18,7 +18,8 @@ namespace BlitzMall_Backend.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterDto dto)
+        public async Task<IActionResult> Register(
+            [FromBody] RegisterDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -26,7 +27,6 @@ namespace BlitzMall_Backend.Controllers
             try
             {
                 var result = await _authService.RegisterAsync(dto);
-
                 return Ok(result);
             }
             catch (InvalidOperationException ex)
@@ -39,7 +39,8 @@ namespace BlitzMall_Backend.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] LoginDto dto)
+        public async Task<IActionResult> Login(
+            [FromBody] LoginDto dto)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
@@ -47,7 +48,6 @@ namespace BlitzMall_Backend.Controllers
             try
             {
                 var result = await _authService.LoginAsync(dto);
-
                 return Ok(result);
             }
             catch (UnauthorizedAccessException)
@@ -55,6 +55,66 @@ namespace BlitzMall_Backend.Controllers
                 return Unauthorized(new
                 {
                     message = "Invalid credentials."
+                });
+            }
+        }
+
+        [HttpPost("google")]
+        public async Task<IActionResult> GoogleLogin(
+            [FromBody] GoogleLoginDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var result = await _authService.GoogleLoginAsync(
+                    dto.IdToken);
+
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new
+                {
+                    message = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new
+                {
+                    message = ex.Message
+                });
+            }
+        }
+
+        [HttpPost("firebase-login")]
+        public async Task<IActionResult> FirebaseLogin(
+            [FromBody] FirebaseLoginDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var result = await _authService.FirebaseLoginAsync(
+                    dto.IdToken);
+
+                return Ok(result);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(new
+                {
+                    message = ex.Message
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
                 });
             }
         }
@@ -69,21 +129,34 @@ namespace BlitzMall_Backend.Controllers
             try
             {
                 await _authService.ForgotPasswordAsync(dto);
-
-                return Ok(new
-                {
-                    message =
-                        "If the email exists, a reset code has been sent."
-                });
             }
             catch
             {
-                return Ok(new
-                {
-                    message =
-                        "If the email exists, a reset code has been sent."
-                });
+                // Do not reveal whether the email exists.
             }
+
+            return Ok(new
+            {
+                message =
+                    "If the email exists, a reset code has been sent."
+            });
+        }
+
+        [HttpPost("verify-code")]
+        public async Task<IActionResult> VerifyCode(
+            [FromBody] VerifyCodeDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var valid = await _authService.VerifyCodeAsync(
+                dto.Email,
+                dto.Code);
+
+            return Ok(new
+            {
+                valid
+            });
         }
 
         [HttpPost("reset-password")]
@@ -149,38 +222,5 @@ namespace BlitzMall_Backend.Controllers
                 });
             }
         }
-            [HttpPost("google")]
-            public async Task<IActionResult> GoogleLogin(
-                [FromBody] GoogleLoginDto dto)
-            {
-                if (!ModelState.IsValid)
-                    return BadRequest(ModelState);
-
-                try
-                {
-                    var result =
-                        await _authService.GoogleLoginAsync(
-                            dto.IdToken);
-
-                    return Ok(result);
-                }
-                catch (UnauthorizedAccessException ex)
-                {
-                    return Unauthorized(new
-                    {
-                        message = ex.Message
-                    });
-                }
-                catch (InvalidOperationException ex)
-                {
-                    return Conflict(new
-                    {
-                        message = ex.Message
-                    });
-                }
-            }
-
-
-
-        }
     }
+}

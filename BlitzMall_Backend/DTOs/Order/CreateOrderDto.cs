@@ -1,10 +1,17 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace BlitzMall_Backend.DTOs.Order
 {
     public class CreateOrderDto
     {
-        [Range(1, int.MaxValue)]
-        public int AddressId { get; set; }
+        public int? AddressId { get; set; }
+
+        [Required]
+        public string DeliveryAddress { get; set; } = string.Empty;
+
+        [Required]
+        public string Phone { get; set; } = string.Empty;
+
+        public string? Comment { get; set; }
     }
 }

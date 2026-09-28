@@ -2,10 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BlitzMall_Backend.DTOs.Auth
 {
-    public class ForgotPasswordDto
+    public class FirebaseLoginDto
     {
         [Required]
-        [EmailAddress]
-        public string Email { get; set; } = string.Empty;
+        public string IdToken { get; set; } = string.Empty;
     }
 }

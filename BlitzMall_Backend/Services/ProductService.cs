@@ -25,19 +25,21 @@ namespace BlitzMall_Backend.Services
             return await _db.Products
                 .Select(p => new ProductDto
                 {
-                    Name = p.Name,
+                    Id          = p.Id,
+                    Name        = p.Name,
                     Description = p.Description,
-                    Price = p.Price,
-                    Quantity = p.Quantity,
-                    IsActive = p.IsActive,
-
-                    BrandName = p.Brand.Name,
-                    CategoryName = p.Category.Name,
-                    SellerName = p.Seller.Name,
-
-                    ImgUrls = p.ProdImgs
-                        .Select(i => i.UrlImage!)
-                        .ToList()
+                    Price       = p.Price,
+                    Quantity    = p.Quantity,
+                    IsActive    = p.IsActive,
+                    BrandName   = p.Brand.Name,
+                    CategoryName= p.Category.Name,
+                    SellerName  = p.Seller.Name,
+                    ImgUrls     = p.ProdImgs.Select(i => i.UrlImage!).ToList(),
+                    ImageUrl    = p.ProdImgs.Select(i => i.UrlImage!).FirstOrDefault(),
+                    Rating      = p.Reviews != null && p.Reviews.Any()
+                                    ? Math.Round(p.Reviews.Average(r => (double)r.Rating), 1)
+                                    : null,
+                    ReviewCount = p.Reviews != null ? p.Reviews.Count : 0,
                 })
                 .ToListAsync();
         }
@@ -48,19 +50,21 @@ namespace BlitzMall_Backend.Services
                 .Where(p => p.Id == id)
                 .Select(p => new ProductDto
                 {
-                    Name = p.Name,
+                    Id          = p.Id,
+                    Name        = p.Name,
                     Description = p.Description,
-                    Price = p.Price,
-                    Quantity = p.Quantity,
-                    IsActive = p.IsActive,
-
-                    BrandName = p.Brand.Name,
-                    CategoryName = p.Category.Name,
-                    SellerName = p.Seller.Name,
-
-                    ImgUrls = p.ProdImgs
-                        .Select(i => i.UrlImage!)
-                        .ToList()
+                    Price       = p.Price,
+                    Quantity    = p.Quantity,
+                    IsActive    = p.IsActive,
+                    BrandName   = p.Brand.Name,
+                    CategoryName= p.Category.Name,
+                    SellerName  = p.Seller.Name,
+                    ImgUrls     = p.ProdImgs.Select(i => i.UrlImage!).ToList(),
+                    ImageUrl    = p.ProdImgs.Select(i => i.UrlImage!).FirstOrDefault(),
+                    Rating      = p.Reviews != null && p.Reviews.Any()
+                                    ? Math.Round(p.Reviews.Average(r => (double)r.Rating), 1)
+                                    : null,
+                    ReviewCount = p.Reviews != null ? p.Reviews.Count : 0,
                 })
                 .FirstOrDefaultAsync();
         }
@@ -235,6 +239,68 @@ namespace BlitzMall_Backend.Services
             await _db.SaveChangesAsync();
 
             return true;
+        }
+
+        public async Task<ProductSearchResultDto> SearchAsync(
+            string? query,
+            int? categoryId,
+            decimal? minPrice,
+            decimal? maxPrice,
+            int page,
+            int pageSize)
+        {
+            var q = _db.Products.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var lower = query.ToLower();
+                q = q.Where(p =>
+                    (p.Name != null && p.Name.ToLower().Contains(lower)) ||
+                    (p.Description != null && p.Description.ToLower().Contains(lower)));
+            }
+
+            if (categoryId.HasValue)
+                q = q.Where(p => p.CategoryId == categoryId.Value);
+
+            if (minPrice.HasValue)
+                q = q.Where(p => p.Price >= minPrice.Value);
+
+            if (maxPrice.HasValue)
+                q = q.Where(p => p.Price <= maxPrice.Value);
+
+            var total = await q.CountAsync();
+
+            var items = await q
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new ProductDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Description = p.Description,
+                    Price = p.Price,
+                    Quantity = p.Quantity,
+                    IsActive = p.IsActive,
+                    BrandName = p.Brand.Name,
+                    CategoryName = p.Category.Name,
+                    SellerName = p.Seller.Name,
+                    ImgUrls = p.ProdImgs.Select(i => i.UrlImage!).ToList(),
+                    ImageUrl = p.ProdImgs.Select(i => i.UrlImage!).FirstOrDefault(),
+                    Rating = p.Reviews != null && p.Reviews.Any()
+                        ? Math.Round(p.Reviews.Average(r => (double)r.Rating), 1)
+                        : null,
+                    ReviewCount = p.Reviews != null ? p.Reviews.Count : 0,
+                })
+                .ToListAsync();
+
+            return new ProductSearchResultDto
+            {
+                Items = items,
+                TotalCount = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize)
+            };
         }
     }
 }

@@ -17,20 +17,16 @@ namespace BlitzMall_Backend.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll([FromQuery] int? productId = null)
         {
             try
             {
-                var reviews = await _reviewService.GetAllAsync();
-
+                var reviews = await _reviewService.GetAllAsync(productId);
                 return Ok(reviews);
             }
             catch (Exception)
             {
-                return StatusCode(500, new
-                {
-                    message = "An unexpected error occurred."
-                });
+                return StatusCode(500, new { message = "An unexpected error occurred." });
             }
         }
 

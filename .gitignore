@@ -10,3 +10,6 @@ obj/
 *.db-wal
 
 appsettings.Development.json
+
+firebase-service-account.json
+BlitzMall_Backend/firebase-service-account.json

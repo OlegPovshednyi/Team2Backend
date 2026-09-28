@@ -9,5 +9,6 @@ namespace BlitzMall_Backend.Services
         Task<ProductDto> CreateAsync(CreateProductDto dto);
         Task<ProductDto?> UpdateAsync(int id, UpdateProductDto dto);
         Task<bool> DeleteAsync(int id);
+        Task<ProductSearchResultDto> SearchAsync(string? query, int? categoryId, decimal? minPrice, decimal? maxPrice, int page, int pageSize);
     }
 }

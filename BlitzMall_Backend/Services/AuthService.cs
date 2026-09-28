@@ -1,6 +1,7 @@
 using BlitzMall_Backend.Data;
 using BlitzMall_Backend.DTOs.Auth;
 using BlitzMall_Backend.Models;
+using FirebaseAdmin.Auth;
 using Google.Apis.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -9,6 +10,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+
 namespace BlitzMall_Backend.Services
 {
     public class AuthService : IAuthService
@@ -62,11 +64,124 @@ namespace BlitzMall_Backend.Services
                 .FirstOrDefaultAsync(u => u.Email == dto.Email)
                 ?? throw new UnauthorizedAccessException("Invalid credentials.");
 
-            if (!BCrypt.Net.BCrypt.Verify(
-                    dto.Password,
-                    user.PasswordHash))
+            if (string.IsNullOrEmpty(user.PasswordHash) ||
+                !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             {
                 throw new UnauthorizedAccessException("Invalid credentials.");
+            }
+
+            return BuildResponse(user, user.Role!.Name!);
+        }
+
+        public async Task<AuthResponseDto> GoogleLoginAsync(string idToken)
+        {
+            var clientId = _config["Google:ClientId"]
+                ?? throw new InvalidOperationException(
+                    "Google Client ID is not configured.");
+
+            var payload = await GoogleJsonWebSignature.ValidateAsync(
+                idToken,
+                new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { clientId }
+                });
+
+            if (payload.EmailVerified != true ||
+                string.IsNullOrEmpty(payload.Email))
+            {
+                throw new UnauthorizedAccessException(
+                    "Invalid Google account.");
+            }
+
+            var user = await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == payload.Email);
+
+            if (user == null)
+            {
+                var role = await _db.Roles
+                    .FirstOrDefaultAsync(r => r.Name == "Buyer")
+                    ?? throw new InvalidOperationException(
+                        "Default role not found.");
+
+                user = new User
+                {
+                    Name = payload.Name ?? payload.Email,
+                    Email = payload.Email,
+                    PasswordHash = null,
+                    RoleId = role.Id,
+                    Status = "Active",
+                    CreatedAt = DateTime.UtcNow,
+                    Role = role
+                };
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+            }
+
+            return BuildResponse(user, user.Role!.Name!);
+        }
+
+        public async Task<AuthResponseDto> FirebaseLoginAsync(string idToken)
+        {
+            FirebaseToken decodedToken;
+
+            try
+            {
+                decodedToken =
+                    await FirebaseAuth.DefaultInstance.VerifyIdTokenAsync(idToken);
+            }
+            catch (Exception)
+            {
+                throw new UnauthorizedAccessException(
+                    "Invalid Firebase token.");
+            }
+
+            var email = decodedToken.Claims.TryGetValue(
+                "email",
+                out var emailClaim)
+                ? emailClaim?.ToString() ?? string.Empty
+                : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                throw new UnauthorizedAccessException(
+                    "Firebase token has no email.");
+            }
+
+            var name = decodedToken.Claims.TryGetValue(
+                "name",
+                out var nameClaim)
+                ? nameClaim?.ToString()
+                : null;
+
+            var user = await _db.Users
+                .Include(u => u.Role)
+                .FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null)
+            {
+                var buyerRole = await _db.Roles
+                    .FirstOrDefaultAsync(r => r.Name == "Buyer")
+                    ?? throw new InvalidOperationException(
+                        "Default role not found.");
+
+                user = new User
+                {
+                    Name = name ?? email.Split('@')[0],
+                    Email = email,
+
+                    // Firebase handles authentication.
+                    PasswordHash = null,
+
+                    RoleId = buyerRole.Id,
+                    CreatedAt = DateTime.UtcNow,
+                    Status = "Active",
+                    Role = buyerRole
+                };
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
             }
 
             return BuildResponse(user, user.Role!.Name!);
@@ -77,7 +192,6 @@ namespace BlitzMall_Backend.Services
             var user = await _db.Users
                 .FirstOrDefaultAsync(u => u.Email == dto.Email);
 
-           
             if (user == null)
                 return;
 
@@ -95,6 +209,20 @@ namespace BlitzMall_Backend.Services
             await _emailService.SendPasswordResetCodeAsync(
                 dto.Email,
                 code);
+        }
+
+        public Task<bool> VerifyCodeAsync(string email, string code)
+        {
+            var cacheKey = $"password-reset:{email}";
+
+            if (_cache.TryGetValue(
+                    cacheKey,
+                    out string? savedCode))
+            {
+                return Task.FromResult(savedCode == code);
+            }
+
+            return Task.FromResult(false);
         }
 
         public async Task ResetPasswordAsync(ResetPasswordDto dto)
@@ -127,7 +255,6 @@ namespace BlitzMall_Backend.Services
             user.PasswordHash =
                 BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
 
-           
             _cache.Remove(cacheKey);
 
             await _db.SaveChangesAsync();
@@ -146,7 +273,8 @@ namespace BlitzMall_Backend.Services
                     "User not found.");
             }
 
-            if (!BCrypt.Net.BCrypt.Verify(
+            if (string.IsNullOrEmpty(user.PasswordHash) ||
+                !BCrypt.Net.BCrypt.Verify(
                     dto.CurrentPassword,
                     user.PasswordHash))
             {
@@ -217,51 +345,5 @@ namespace BlitzMall_Backend.Services
             return new JwtSecurityTokenHandler()
                 .WriteToken(token);
         }
-
-
-        public async Task<AuthResponseDto> GoogleLoginAsync(string idToken)
-        {
-            var clientId = _config["Google:ClientId"]
-                ?? throw new InvalidOperationException("Google Client ID is not configured.");
-
-            var payload = await GoogleJsonWebSignature.ValidateAsync(
-                idToken,
-                new GoogleJsonWebSignature.ValidationSettings
-                {
-                    Audience = new[] { clientId }
-                });
-
-            if (payload.EmailVerified != true || string.IsNullOrEmpty(payload.Email))
-                throw new UnauthorizedAccessException("Invalid Google account.");
-
-            var user = await _db.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email == payload.Email);
-
-            if (user == null)
-            {
-                var role = await _db.Roles
-                    .FirstOrDefaultAsync(r => r.Name == "Buyer")
-                    ?? throw new InvalidOperationException("Default role not found.");
-
-                user = new User
-                {
-                    Name = payload.Name ?? payload.Email,
-                    Email = payload.Email,
-                    PasswordHash = null,
-                    RoleId = role.Id,
-                    Status = "Active",
-                    CreatedAt = DateTime.UtcNow,
-                    Role = role
-                };
-
-                _db.Users.Add(user);
-                await _db.SaveChangesAsync();
-            }
-
-            return BuildResponse(user, user.Role!.Name!);
-        }
-
     }
-    }
-
+}

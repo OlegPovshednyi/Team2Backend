@@ -1,6 +1,8 @@
 using BlitzMall_Backend.Data;
 using BlitzMall_Backend.Models;
 using BlitzMall_Backend.Services;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -17,8 +19,17 @@ namespace BlitzMall_Backend
 
             builder.Services.AddControllersWithViews();
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("FrontendPolicy", policy =>
+                    policy.WithOrigins("http://localhost:5173", "http://localhost:5174")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials());
+            });
+
             builder.Services.AddDbContext<AppDbContext>(options =>
-                options.UseSqlServer(
+                options.UseNpgsql(
                     builder.Configuration.GetConnectionString("DefaultConnection")));
 
             builder.Services.AddScoped<IAuthService, AuthService>();
@@ -31,12 +42,14 @@ namespace BlitzMall_Backend
             builder.Services.AddScoped<ISellerService, SellerService>();
             builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<ICartService, CartService>();
-            builder.Services.AddHttpContextAccessor();
-            builder.Services.AddMemoryCache();
-            builder.Services.AddScoped<IEmailService, EmailService>();
             builder.Services.AddScoped<IOrderService, OrderService>();
             builder.Services.AddScoped<IPaymentService, PaymentService>();
             builder.Services.AddScoped<IDeliveryService, DeliveryService>();
+
+            builder.Services.AddHttpContextAccessor();
+            builder.Services.AddMemoryCache();
+            builder.Services.AddScoped<IEmailService, EmailService>();
+
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
@@ -52,6 +65,7 @@ namespace BlitzMall_Backend
                             Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
                     };
                 });
+
             builder.Services.AddEndpointsApiExplorer();
 
             builder.Services.AddSwaggerGen(options =>
@@ -82,6 +96,37 @@ namespace BlitzMall_Backend
                 });
             });
 
+            var firebaseEmulatorHost =
+                Environment.GetEnvironmentVariable("FIREBASE_AUTH_EMULATOR_HOST");
+
+            var firebaseCredentialPath =
+                builder.Configuration["Firebase:ServiceAccountPath"];
+
+            if (!string.IsNullOrWhiteSpace(firebaseEmulatorHost))
+            {
+                FirebaseApp.Create(new AppOptions
+                {
+                    ProjectId = builder.Configuration["Firebase:ProjectId"],
+                    Credential = GoogleCredential.FromAccessToken("test-token")
+                });
+
+                Console.WriteLine(
+                    $"Firebase running against emulator: {firebaseEmulatorHost}");
+            }
+            else if (!string.IsNullOrWhiteSpace(firebaseCredentialPath) &&
+                     File.Exists(firebaseCredentialPath))
+            {
+                FirebaseApp.Create(new AppOptions
+                {
+                    Credential = GoogleCredential.FromFile(firebaseCredentialPath)
+                });
+            }
+            else
+            {
+                Console.WriteLine(
+                    "Firebase service account not found. Firebase login endpoint will not work until 'Firebase:ServiceAccountPath' is configured.");
+            }
+
             var app = builder.Build();
 
             using (var scope = app.Services.CreateScope())
@@ -103,7 +148,7 @@ namespace BlitzMall_Backend
             app.UseHttpsRedirection();
             app.UseStaticFiles();
             app.UseRouting();
-
+            app.UseCors("FrontendPolicy");
             app.UseAuthentication();
             app.UseAuthorization();
 
