@@ -17,24 +17,34 @@ namespace BlitzMall_Backend.Controllers
             _orderService = orderService;
         }
 
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateOrderDto dto)
+        [Authorize(Roles = "Admin")]
+        [HttpGet]
+        public async Task<ActionResult<List<OrderDto>>> GetAll()
         {
-            if (!ModelState.IsValid)
-                return BadRequest(ModelState);
-
             try
             {
-                var order = await _orderService.CreateFromCartAsync(dto);
-                return Ok(order);
+                return Ok(await _orderService.GetAllAsync());
             }
-            catch (InvalidOperationException ex)
+            catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                return StatusCode(500, new { message = ex.Message });
             }
-            catch (Exception)
+        }
+
+        [HttpGet("{id}")]
+        public async Task<ActionResult<OrderDto>> GetById(int id)
+        {
+            try
             {
-                return StatusCode(500, new { message = "Unexpected error." });
+                var order = await _orderService.GetByIdAsync(id);
+
+                return order == null
+                    ? NotFound()
+                    : Ok(order);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
             }
         }
 
@@ -48,7 +58,83 @@ namespace BlitzMall_Backend.Controllers
             }
             catch (Exception)
             {
-                return StatusCode(500, new { message = "Unexpected error." });
+                return StatusCode(500, new
+                {
+                    message = "Unexpected error."
+                });
+            }
+        }
+
+        [HttpPost]
+        public async Task<ActionResult<OrderDto>> Create(
+            [FromBody] CreateOrderDto dto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            try
+            {
+                var order = await _orderService.CreateFromCartAsync(dto);
+
+                return Ok(order);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Unexpected error."
+                });
+            }
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpPut("{id}/status")]
+        public async Task<ActionResult<OrderDto>> UpdateStatus(
+            int id,
+            [FromBody] UpdateOrderStatusDto dto)
+        {
+            try
+            {
+                var order = await _orderService.UpdateStatusAsync(
+                    id,
+                    dto);
+
+                return order == null
+                    ? NotFound()
+                    : Ok(order);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = ex.Message
+                });
+            }
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            try
+            {
+                return await _orderService.DeleteAsync(id)
+                    ? NoContent()
+                    : NotFound();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    message = ex.Message
+                });
             }
         }
     }
